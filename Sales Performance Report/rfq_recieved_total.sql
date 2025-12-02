@@ -1,5 +1,3 @@
-
-## rfq recieved total 
 SELECT 
     COUNT(DISTINCT r.id) AS unique_rfq_count
 FROM public.bt_rfq r

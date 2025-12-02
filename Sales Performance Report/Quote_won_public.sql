@@ -13,5 +13,5 @@ LEFT JOIN bt_rfq_status rsq
     ON rq.status = rsq.id 
 LEFT JOIN vendor_products vp
     ON rp.product_id = vp.product_id
-WHERE r.visibility = 'private'
-;
+WHERE r.visibility = 'public'
+and rs.seller_status ='Quote Won';
