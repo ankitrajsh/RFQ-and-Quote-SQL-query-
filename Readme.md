@@ -29,6 +29,16 @@ This document lists all SQL files in the workspace and their purpose.
 - **rfq_recieved_public.sql**: Counts public RFQs received.
 - **rfq_recieved_total.sql**: Counts all RFQs received.
 
+## RFQ & Quote Conversion Report Folder
+
+- **RFQs_Received_Quotes_Submitted_Conversion_Rate.sql**: Calculates RFQs received, quotes submitted, quotes converted, and conversion rate percentage.
+- **Price_Competitiveness.sql**: Analyzes price competitiveness by comparing vendor quotes with winning quotes.
+- **Avg_Response_Time.sql**: Calculates average vendor response time from RFQ publication to quote submission.
+- **Funnel_Chart.sql**: Provides funnel chart data showing RFQ to conversion flow.
+- **Heatmap_RFQs_by_Region_Product.sql**: Generates heatmap data for RFQs by region and product.
+- **Box_Plot_Price_Variance.sql**: Analyzes price variance across RFQs for box plot visualization.
+- **Response_Time_Histogram.sql**: Provides histogram data for vendor response times.
+
 ---
 
 Each file contains a single query for reporting or analysis purposes. For details, refer to the SQL code in each file.
