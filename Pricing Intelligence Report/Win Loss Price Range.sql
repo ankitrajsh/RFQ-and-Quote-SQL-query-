@@ -1,59 +1,57 @@
 
 
+
 -----Win-Loss Price Range: % of orders won at which price points.
--- ====== FILTER PARAMS ======
 WITH params AS (
     SELECT 
-        517 AS vendor_id   -- << put your seller_user_id here
+        517::bigint AS vendor_id        -- << put your vendor_id here
 ),
 
--- ====== WINNING QUOTES ======
-rfq_winners AS (
+base AS (
     SELECT 
-        rfq.rfq_id,
-        pd.seller_user_id AS winner_vendor_id,
-        rfq."unitPrice" AS winning_price
+        r.id AS rfq_id,
+        rq.id AS quote_id,
+        rq.status,
+        pd.total_amount,
+        pd.total_qty,
+        pd.seller_org_id
     FROM po_details pd
-    LEFT JOIN po_quotes pq ON pd.id = pq.po_id
-    LEFT JOIN bt_rfq_quotes rfq ON pq.quote_id = rfq.id
-    WHERE rfq.status = 6
-),
+    JOIN po_quotes pq 
+        ON pd.id = pq.po_id
+    JOIN bt_rfq_quotes rq 
+        ON pq.quote_id = rq.id
+    JOIN bt_rfq r 
+        ON rq.rfq_id = r.id
+    JOIN params p 
+        ON pd.seller_org_id = p.vendor_id   
 
--- ====== ALL QUOTES + OUTCOME ======
-vendor_quotes_with_outcome AS (
+agg AS (
     SELECT 
-        pd.seller_user_id,
-        rfq.rfq_id,
-        rfq."unitPrice" AS vendor_price,
-        rfq.status,
-        CASE WHEN rfq.status = 6 THEN 'Won' ELSE 'Lost' END AS outcome,
-        rw.winning_price,
-        CASE 
-            WHEN rfq.status = 6 THEN rfq."unitPrice"
-            ELSE rw.winning_price
-        END AS reference_price
-    FROM po_details pd
-    CROSS JOIN params p
-    LEFT JOIN po_quotes pq ON pd.id = pq.po_id
-    LEFT JOIN bt_rfq_quotes rfq ON pq.quote_id = rfq.id
-    LEFT JOIN rfq_winners rw ON rfq.rfq_id = rw.rfq_id
-    WHERE rfq."unitPrice" IS NOT NULL
-      AND pd.seller_user_id = p.vendor_id   -- <<< FILTER APPLIED HERE
+        rfq_id,
+        MAX(CASE WHEN status = 6 THEN total_amount END) AS won_amount,
+        MIN(CASE WHEN status <> 6 THEN total_amount END) AS min_competitor_amount
+    FROM base
+    GROUP BY rfq_id
 )
 
--- ====== FINAL RESULT ======
 SELECT 
-    seller_user_id,
-    COUNT(*) AS total_quotes,
-    SUM(CASE WHEN outcome = 'Won' THEN 1 ELSE 0 END) AS won_quotes,
-    SUM(CASE WHEN outcome = 'Lost' THEN 1 ELSE 0 END) AS lost_quotes,
+    b.rfq_id,
+    b.quote_id,
+    b.status,
+    b.total_amount,
+    b.seller_org_id AS vendor_id,
+    a.won_amount,
+    a.min_competitor_amount,
+
     CASE 
-        WHEN SUM(CASE WHEN outcome = 'Won' THEN 1 ELSE 0 END) > 0 
-        THEN ROUND(CAST((SUM(CASE WHEN outcome = 'Won' THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) AS numeric), 2)
-        ELSE ROUND(CAST(AVG(CASE WHEN outcome = 'Lost' THEN 
-            ((vendor_price - winning_price) * 100.0 / NULLIF(winning_price, 0)) 
-        END) AS numeric), 2)
-    END AS win_loss_percentage
-FROM vendor_quotes_with_outcome
-GROUP BY seller_user_id
-ORDER BY total_quotes DESC;
+        WHEN b.status = 6 THEN (a.won_amount - a.min_competitor_amount)
+    END AS win_loss_percentage,
+
+    CASE 
+        WHEN b.status <> 6 THEN (b.total_amount - a.won_amount)
+    END AS competitor_diff
+
+FROM base b
+LEFT JOIN agg a 
+    ON b.rfq_id = a.rfq_id
+ORDER BY b.rfq_id, b.quote_id;

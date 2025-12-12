@@ -1,40 +1,46 @@
------Pricing Intelligence Report: Median Price Gap-----
-
-WITH master_table AS (
+-----Median Price Gap: Difference between listed and market median.
+-- ==== Filter Parameters ====
+WITH params AS (
     SELECT 
-        product_id,
-        org_id,
-        category_ids #>> '{cat_0,-1,name}' AS cat_name,
-        product_name,
-        (random() * 999 + 1)::int AS product_price
-    FROM public.vendor_products
+        130::bigint  AS vendor_id,
+        'Gears'::text AS cat_name
 ),
-
--- Median by org + category
+master_table AS (
+    SELECT 
+        vp.org_id AS vendor_id,
+        vp.category_ids #>> '{cat_0,-1,name}' AS cat_name,
+        (random() * 999 + 1)::int AS product_price
+    FROM public.vendor_products vp
+    CROSS JOIN params p
+    WHERE vp.org_id = p.vendor_id
+      AND (vp.category_ids #>> '{cat_0,-1,name}') = p.cat_name
+),
 median_table AS (
     SELECT 
-        org_id,
+        vendor_id,
         cat_name,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY product_price) AS median_price
     FROM master_table
-    GROUP BY org_id, cat_name
+    GROUP BY vendor_id, cat_name
+),
+
+price_diff AS (
+    SELECT 
+        m.vendor_id,
+        m.cat_name,
+        (m.product_price - md.median_price) AS price_difference
+    FROM master_table m
+    JOIN median_table md
+          ON m.vendor_id = md.vendor_id
+         AND m.cat_name = md.cat_name
 )
 
 SELECT 
-    m.product_id,
-    m.org_id,
-    m.cat_name,
-    m.product_name,
-    m.product_price,
-    md.median_price,
-    (m.product_price - md.median_price) AS price_difference,
-    CASE 
-        WHEN m.product_price > md.median_price THEN 'Above Median'
-        WHEN m.product_price < md.median_price THEN 'Below Median'
-        ELSE 'Equal to Median'
-    END AS price_position
-FROM master_table m
-JOIN median_table md
-    ON m.org_id = md.org_id
-   AND m.cat_name = md.cat_name
-ORDER BY m.org_id, m.cat_name, price_difference DESC;
+    vendor_id,
+    cat_name,
+    AVG(price_difference) AS avg_price_difference
+FROM price_diff
+GROUP BY vendor_id, cat_name
+ORDER BY vendor_id, cat_name;
+
+
