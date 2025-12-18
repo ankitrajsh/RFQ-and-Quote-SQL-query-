@@ -39,6 +39,38 @@ This document lists all SQL files in the workspace and their purpose.
 - **Box_Plot_Price_Variance.sql**: Analyzes price variance across RFQs for box plot visualization.
 - **Response_Time_Histogram.sql**: Provides histogram data for vendor response times.
 
+## Customer Engagement Behaviour Report Folder
+
+- **Add-to-Quote Rate.sql**: Calculates the rate at which products are added to quotes.
+- **Buyer Intent Score.sql**: Computes buyer intent scores based on engagement metrics.
+- **Clickstream Treemap-chart.sql**: Generates clickstream data for treemap visualization.
+- **Drop-off Points in Conversion Flow.sql**: Identifies drop-off points in the customer conversion funnel.
+- **Engagement Duration.sql**: Measures customer engagement duration metrics.
+- **Engagement Frequency Segmentation.sql**: Segments customers by engagement frequency.
+- **Engagement Funnel-chart.sql**: Provides data for engagement funnel visualization.
+- **Heatmap-Chart.sql**: Generates heatmap data for customer engagement analysis.
+- **Message Initiation.sql**: Tracks message initiation patterns between buyers and vendors.
+- **Sankey-chart.sql**: Provides data for Sankey diagram visualization of customer flow.
+- **Views per Product.sql**: Counts product views by category or product.
+- **Wishlist Activity.sql**: Analyzes wishlist activity by product category.
+
+## Logistics Fulfillment Report Folder
+
+- **Delivery Time vs. SLA.sql**: Compares actual delivery times against SLA targets.
+- **Fulfillment Cost.sql**: Analyzes fulfillment costs across orders.
+- **On-Time Delivery Rate.sql**: Calculates on-time delivery performance rate.
+- **Return RTO Rate.sql**: Measures return to origin (RTO) rate for shipments.
+
+## Pricing Intelligence Report Folder
+
+- **Median Price Gap.sql**: Calculates median price gap between vendor quotes and market prices.
+- **Win Loss Price Range.sql**: Analyzes price ranges for won vs. lost quotes.
+
+## Vendor Financial Dashboard Folder
+
+- **Overdue_invoices.sql**: Tracks overdue invoices for vendors.
+- **Total_revenue_gross_net_earnings.sql**: Calculates total revenue, gross earnings, and net earnings for vendors.
+
 ---
 
 Each file contains a single query for reporting or analysis purposes. For details, refer to the SQL code in each file.
