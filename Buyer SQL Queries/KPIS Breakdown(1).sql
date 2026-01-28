@@ -1,0 +1,383 @@
+-------------------------------------------------------------
+-- Graph 1.1: Purchasing Volume
+-------------------------------------------------------------
+
+-- WITH params AS (
+--     SELECT 
+--         DATE '2025-07-01' AS start_date,
+--         DATE '2025-07-28' AS end_date,
+--         'MTD' AS period_type  -- 'WTD', 'MTD', or 'YTD'
+-- ),
+-- filtered_data AS (
+--     SELECT total_amount, updated_date
+--     FROM po_items
+--     WHERE updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+-- ),
+-- data_with_periods AS (
+--     SELECT
+--         CASE
+--             WHEN (SELECT period_type FROM params) = 'WTD' THEN EXTRACT(DOW FROM updated_date)
+--             WHEN (SELECT period_type FROM params) = 'MTD' THEN EXTRACT(DAY FROM updated_date)
+--             ELSE EXTRACT(DOY FROM updated_date)
+--         END AS period_label,
+--         SUM(total_amount) AS purchase_volume
+--     FROM filtered_data
+--     GROUP BY period_label
+-- ),
+-- summary AS (
+--     SELECT SUM(purchase_volume) AS current_value FROM data_with_periods
+-- )
+-- SELECT 
+--     -- Trend data by period (e.g., day of month if MTD)
+--     (SELECT json_agg(row_to_json(dwp)) 
+--      FROM (
+--          SELECT * 
+--          FROM data_with_periods 
+--          ORDER BY period_label
+--      ) dwp) AS trend,
+     
+--     -- Total value for current period
+--     (SELECT current_value FROM summary) AS current_value,
+    
+--     -- Percentage change vs. previous period
+--     (
+--         SELECT 
+--             ROUND((
+--                 CASE 
+--                     WHEN prev.current_value = 0 THEN 100
+--                     ELSE ((summary.current_value - prev.current_value) / prev.current_value::numeric) * 100
+--                 END
+--             )::numeric, 2)
+--         FROM summary,
+--             (
+--                 SELECT SUM(total_amount) AS current_value
+--                 FROM po_items
+--                 WHERE updated_date BETWEEN 
+--                     CASE 'MTD'
+--                         WHEN 'WTD' THEN DATE '2025-07-01' - INTERVAL '7 days'
+--                         WHEN 'MTD' THEN DATE '2025-07-01' - INTERVAL '1 month'
+--                         ELSE DATE '2025-07-01' - INTERVAL '1 year'
+--                     END
+--                     AND DATE '2025-07-01' - INTERVAL '1 day'
+--             ) prev
+--     ) AS percentage_change;
+
+-------------------------------------------------------------
+-- Graph 2.1: Suppliers
+-------------------------------------------------------------
+
+-- WITH params AS (
+--     SELECT 
+--         DATE '2025-07-01' AS start_date,
+--         DATE '2025-07-28' AS end_date,
+--         'MTD' AS period_type  -- Change to 'WTD' or 'YTD' if needed
+-- ),
+-- filtered_data AS (
+--     SELECT DISTINCT vendor_id, updated_date
+--     FROM po_items
+--     WHERE updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+-- ),
+-- data_with_periods AS (
+--     SELECT
+--         CASE
+--             WHEN (SELECT period_type FROM params) = 'WTD' THEN EXTRACT(DOW FROM updated_date)
+--             WHEN (SELECT period_type FROM params) = 'MTD' THEN EXTRACT(DAY FROM updated_date)
+--             ELSE EXTRACT(DOY FROM updated_date)
+--         END AS period_label,
+--         COUNT(DISTINCT vendor_id) AS supplier_count
+--     FROM filtered_data
+--     GROUP BY period_label
+-- ),
+-- summary AS (
+--     SELECT SUM(supplier_count) AS current_value FROM data_with_periods
+-- )
+-- SELECT 
+--     -- Trend by period
+--     (SELECT json_agg(row_to_json(dwp)) 
+--      FROM (
+--          SELECT * FROM data_with_periods ORDER BY period_label
+--      ) dwp) AS trend,
+     
+--     -- Total unique supplier count in the period
+--     (SELECT current_value FROM summary) AS current_value,
+    
+--     -- Percentage change compared to previous period
+--     (
+--         SELECT 
+--             ROUND((
+--                 CASE 
+--                     WHEN prev.current_value = 0 THEN 100
+--                     ELSE ((summary.current_value - prev.current_value) / prev.current_value::numeric) * 100
+--                 END
+--             )::numeric, 2)
+--         FROM summary,
+--             (
+--                 SELECT COUNT(DISTINCT vendor_id) AS current_value
+--                 FROM po_items
+--                 WHERE updated_date BETWEEN 
+--                     CASE 'MTD'
+--                         WHEN 'WTD' THEN DATE '2025-07-01' - INTERVAL '7 days'
+--                         WHEN 'MTD' THEN DATE '2025-07-01' - INTERVAL '1 month'
+--                         ELSE DATE '2025-07-01' - INTERVAL '1 year'
+--                     END
+--                     AND DATE '2025-07-01' - INTERVAL '1 day'
+--             ) prev
+--     ) AS percentage_change;
+
+-- -------------------------------------------------------------
+-- -- Graph 3.1: Volume Per Supplier
+-- -------------------------------------------------------------
+
+-- -- WITH params AS (
+-- --     SELECT 
+-- --         DATE '2025-07-01' AS start_date,
+-- --         DATE '2025-07-28' AS end_date,
+-- --         'MTD' AS period_type
+-- -- ),
+-- -- filtered_data AS (
+-- --     SELECT vendor_id, total_amount, updated_date
+-- --     FROM po_items
+-- --     WHERE updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+-- -- ),
+-- -- data_with_periods AS (
+-- --     SELECT
+-- --         CASE
+-- --             WHEN (SELECT period_type FROM params) = 'WTD' THEN EXTRACT(DOW FROM updated_date)
+-- --             WHEN (SELECT period_type FROM params) = 'MTD' THEN EXTRACT(DAY FROM updated_date)
+-- --             ELSE EXTRACT(DOY FROM updated_date)
+-- --         END AS period_label,
+-- --         SUM(total_amount) / NULLIF(COUNT(DISTINCT vendor_id), 0) AS volume_per_supplier
+-- --     FROM filtered_data
+-- --     GROUP BY period_label
+-- -- ),
+-- -- summary AS (
+-- --     SELECT ROUND(AVG(volume_per_supplier)::numeric, 2) AS current_value FROM data_with_periods
+-- -- )
+-- -- SELECT 
+-- --     -- Trend
+-- --     (SELECT json_agg(row_to_json(dwp)) 
+-- --      FROM (
+-- --          SELECT * 
+-- --          FROM data_with_periods 
+-- --          ORDER BY period_label
+-- --      ) dwp) AS trend,
+     
+-- --     -- Current value
+-- --     (SELECT current_value FROM summary) AS current_value,
+    
+-- --     -- Percentage change
+-- --     (
+-- --         SELECT 
+-- --             ROUND((
+-- --                 CASE 
+-- --                     WHEN prev.current_value = 0 THEN 100
+-- --                     ELSE ((summary.current_value - prev.current_value) / prev.current_value::numeric) * 100
+-- --                 END
+-- --             )::numeric, 2)
+-- --         FROM summary,
+-- --             (
+-- --                 SELECT 
+-- --                     ROUND(
+-- --                         (SUM(total_amount) / NULLIF(COUNT(DISTINCT vendor_id), 0))::numeric, 
+-- --                         2
+-- --                     ) AS current_value
+-- --                 FROM po_items
+-- --                 WHERE updated_date BETWEEN 
+-- --                     CASE 'MTD'
+-- --                         WHEN 'WTD' THEN DATE '2025-07-01' - INTERVAL '7 days'
+-- --                         WHEN 'MTD' THEN DATE '2025-07-01' - INTERVAL '1 month'
+-- --                         ELSE DATE '2025-07-01' - INTERVAL '1 year'
+-- --                     END
+-- --                     AND DATE '2025-07-01' - INTERVAL '1 day'
+-- --             ) prev
+-- --     ) AS percentage_change;
+
+-- -------------------------------------------------------------
+-- -- Graph 4.1: Items Purchased
+-- -------------------------------------------------------------
+
+-- -- WITH params AS (
+-- --     SELECT 
+-- --         DATE '2025-07-01' AS start_date,
+-- --         DATE '2025-07-28' AS end_date,
+-- --         'MTD' AS period_type  -- Change to 'WTD' or 'YTD' as needed
+-- -- ),
+-- -- filtered_data AS (
+-- --     SELECT product_id, updated_date
+-- --     FROM po_items
+-- --     WHERE updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+-- -- ),
+-- -- data_with_periods AS (
+-- --     SELECT
+-- --         CASE
+-- --             WHEN (SELECT period_type FROM params) = 'WTD' THEN EXTRACT(DOW FROM updated_date)
+-- --             WHEN (SELECT period_type FROM params) = 'MTD' THEN EXTRACT(DAY FROM updated_date)
+-- --             ELSE EXTRACT(DOY FROM updated_date)
+-- --         END AS period_label,
+-- --         COUNT(DISTINCT product_id) AS items_purchased
+-- --     FROM filtered_data
+-- --     GROUP BY period_label
+-- -- ),
+-- -- summary AS (
+-- --     SELECT SUM(items_purchased) AS current_value FROM data_with_periods
+-- -- )
+-- -- SELECT 
+-- --     -- Trend JSON
+-- --     (
+-- --         SELECT json_agg(row_to_json(dwp)) 
+-- --         FROM (
+-- --             SELECT * 
+-- --             FROM data_with_periods 
+-- --             ORDER BY period_label
+-- --         ) dwp
+-- --     ) AS trend,
+
+-- --     -- Current value total
+-- --     (SELECT current_value FROM summary) AS current_value,
+
+-- --     -- Percentage change vs. previous period
+-- --     (
+-- --         SELECT 
+-- --             ROUND((
+-- --                 CASE 
+-- --                     WHEN prev.current_value = 0 THEN 100
+-- --                     ELSE ((summary.current_value - prev.current_value) / prev.current_value::numeric) * 100
+-- --                 END
+-- --             )::numeric, 2)
+-- --         FROM summary,
+-- --             (
+-- --                 SELECT COUNT(DISTINCT product_id) AS current_value
+-- --                 FROM po_items
+-- --                 WHERE updated_date BETWEEN 
+-- --                     CASE 'MTD'
+-- --                         WHEN 'WTD' THEN DATE '2025-07-01' - INTERVAL '7 days'
+-- --                         WHEN 'MTD' THEN DATE '2025-07-01' - INTERVAL '1 month'
+-- --                         ELSE DATE '2025-07-01' - INTERVAL '1 year'
+-- --                     END
+-- --                     AND DATE '2025-07-01' - INTERVAL '1 day'
+-- --             ) prev
+-- --     ) AS percentage_change;
+
+-- -------------------------------------------------------------
+-- -- Graph 5.1: Total Purchase Quantity
+-- -------------------------------------------------------------
+
+-- -- WITH params AS (
+-- --     SELECT 
+-- --         DATE '2025-07-01' AS start_date,
+-- --         DATE '2025-07-28' AS end_date,
+-- --         'MTD' AS period_type  -- Change to 'WTD' or 'YTD' for other types
+-- -- ),
+-- -- filtered_data AS (
+-- --     SELECT qty, updated_date
+-- --     FROM po_items
+-- --     WHERE updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+-- -- ),
+-- -- data_with_periods AS (
+-- --     SELECT
+-- --         CASE
+-- --             WHEN (SELECT period_type FROM params) = 'WTD' THEN EXTRACT(DOW FROM updated_date)
+-- --             WHEN (SELECT period_type FROM params) = 'MTD' THEN EXTRACT(DAY FROM updated_date)
+-- --             ELSE EXTRACT(DOY FROM updated_date)
+-- --         END AS period_label,
+-- --         SUM(qty) AS total_quantity
+-- --     FROM filtered_data
+-- --     GROUP BY period_label
+-- -- ),
+-- -- summary AS (
+-- --     SELECT SUM(total_quantity) AS current_value FROM data_with_periods
+-- -- )
+-- -- SELECT 
+-- --     (
+-- --         SELECT json_agg(row_to_json(dwp))
+-- --         FROM (
+-- --             SELECT * 
+-- --             FROM data_with_periods 
+-- --             ORDER BY period_label
+-- --         ) dwp
+-- --     ) AS trend,
+
+-- --     (SELECT current_value FROM summary) AS current_value,
+
+-- --     (
+-- --         SELECT 
+-- --             ROUND((
+-- --                 CASE 
+-- --                     WHEN prev.current_value = 0 THEN 100
+-- --                     ELSE ((summary.current_value - prev.current_value) / prev.current_value::numeric) * 100
+-- --                 END
+-- --             )::numeric, 2)
+-- --         FROM summary,
+-- --             (
+-- --                 SELECT SUM(qty) AS current_value
+-- --                 FROM po_items
+-- --                 WHERE updated_date BETWEEN 
+-- --                     CASE 'MTD'
+-- --                         WHEN 'WTD' THEN DATE '2025-07-01' - INTERVAL '7 days'
+-- --                         WHEN 'MTD' THEN DATE '2025-07-01' - INTERVAL '1 month'
+-- --                         ELSE DATE '2025-07-01' - INTERVAL '1 year'
+-- --                     END
+-- --                     AND DATE '2025-07-01' - INTERVAL '1 day'
+-- --             ) prev
+-- --     ) AS percentage_change;
+
+-- -------------------------------------------------------------
+-- -- Graph 6.1: Average Buying Price
+-- -------------------------------------------------------------
+
+-- WITH params AS (
+--     SELECT 
+--         DATE '2025-07-01' AS start_date,
+--         DATE '2025-07-28' AS end_date,
+--         'MTD' AS period_type  -- 'WTD', 'MTD', or 'YTD'
+-- ),
+-- filtered_data AS (
+--     SELECT unit_price, updated_date
+--     FROM po_items
+--     WHERE updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+--       AND unit_price IS NOT NULL
+-- ),
+-- data_with_periods AS (
+--     SELECT
+--         CASE
+--             WHEN (SELECT period_type FROM params) = 'WTD' THEN EXTRACT(DOW FROM updated_date)
+--             WHEN (SELECT period_type FROM params) = 'MTD' THEN EXTRACT(DAY FROM updated_date)
+--             ELSE EXTRACT(DOY FROM updated_date)
+--         END AS period_label,
+--         AVG(unit_price) AS avg_buying_price
+--     FROM filtered_data
+--     GROUP BY period_label
+-- ),
+-- summary AS (
+--     SELECT ROUND(AVG(unit_price)::numeric, 2) AS current_value FROM filtered_data
+-- )
+-- SELECT 
+--     (SELECT json_agg(row_to_json(dwp)) 
+--      FROM (
+--          SELECT * FROM data_with_periods ORDER BY period_label
+--      ) dwp) AS trend,
+     
+--     (SELECT current_value FROM summary) AS current_value,
+    
+--     (
+--         SELECT 
+--             ROUND(
+--                 CASE 
+--                     WHEN prev.current_value = 0 THEN 100
+--                     ELSE ((summary.current_value - prev.current_value) / prev.current_value::numeric) * 100
+--                 END, 2
+--             )
+--         FROM summary,
+--             (
+--                 SELECT ROUND(AVG(unit_price)::numeric, 2) AS current_value
+--                 FROM po_items
+--                 WHERE updated_date BETWEEN 
+--                     CASE (SELECT period_type FROM params)
+--                         WHEN 'WTD' THEN (SELECT start_date FROM params) - INTERVAL '7 days'
+--                         WHEN 'MTD' THEN (SELECT start_date FROM params) - INTERVAL '1 month'
+--                         ELSE (SELECT start_date FROM params) - INTERVAL '1 year'
+--                     END
+--                     AND (SELECT start_date FROM params) - INTERVAL '1 day'
+--                     AND unit_price IS NOT NULL
+--             ) prev
+--     ) AS percentage_change;

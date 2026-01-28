@@ -1,0 +1,539 @@
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- Card 1 In Purchasing Performance 
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- WITH params AS (
+--     SELECT 
+--         DATE '2024-06-23' AS start_date,
+--         DATE '2025-06-23' AS end_date,
+--         CASE 
+--             WHEN AGE(DATE '2025-06-23', DATE '2024-06-23') > INTERVAL '6 years' THEN 'year'
+--             WHEN AGE(DATE '2025-06-23', DATE '2024-06-23') > INTERVAL '6 months' THEN 'month'
+--             WHEN AGE(DATE '2025-06-23', DATE '2024-06-23') > INTERVAL '6 weeks' THEN 'week'
+--             ELSE 'day'
+--         END AS period_type
+-- ),
+-- filtered_data AS (
+--     SELECT 
+--         pi.updated_date,
+--         pi.total_amount,
+--         pi.product_id
+--     FROM po_items pi
+--     WHERE pi.updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+-- ),
+-- periodic_trend_6 AS (
+--     SELECT 
+--         DATE_TRUNC((SELECT period_type FROM params), updated_date) AS period,
+--         SUM(total_amount) AS total_purchased
+--     FROM filtered_data
+--     GROUP BY period
+--     ORDER BY period DESC
+--     LIMIT 6
+-- ),
+-- periodic_trend_12 AS (
+--     SELECT 
+--         DATE_TRUNC((SELECT period_type FROM params), updated_date) AS period,
+--         SUM(total_amount) AS total_purchased
+--     FROM filtered_data
+--     GROUP BY period
+--     ORDER BY period DESC
+--     LIMIT 12
+-- ),
+-- current_period_total AS (
+--     SELECT SUM(total_amount) AS current_total FROM filtered_data
+-- ),
+-- previous_period_total AS (
+--     SELECT 
+--         SUM(total_amount) AS previous_total
+--     FROM po_items
+--     WHERE updated_date BETWEEN 
+--         CASE (SELECT period_type FROM params)
+--             WHEN 'year' THEN (SELECT start_date FROM params) - INTERVAL '1 year'
+--             WHEN 'month' THEN (SELECT start_date FROM params) - INTERVAL '1 month'
+--             WHEN 'week' THEN (SELECT start_date FROM params) - INTERVAL '7 days'
+--             ELSE (SELECT start_date FROM params) - INTERVAL '1 day'
+--         END
+--         AND ((SELECT start_date FROM params) - INTERVAL '1 day')
+-- ),
+-- current_product_split AS (
+--     SELECT 
+--         vp.product_name,
+--         SUM(pi.total_amount) AS total_purchased
+--     FROM po_items pi
+--     JOIN vendor_products vp ON pi.product_id = vp.id
+--     WHERE pi.updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+--     GROUP BY vp.product_name
+--     ORDER BY total_purchased DESC
+-- ),
+-- summary_6 AS (
+--     SELECT 
+--         (SELECT current_total FROM current_period_total) AS current_total,
+--         (SELECT previous_total FROM previous_period_total) AS previous_total
+-- )
+-- SELECT 
+--     (SELECT json_agg(row_to_json(rp)) FROM (SELECT TO_CHAR(period, 
+--         CASE (SELECT period_type FROM params)
+--             WHEN 'year' THEN 'YYYY'
+--             WHEN 'month' THEN 'Mon YYYY'
+--             WHEN 'week' THEN '"Week "IW, YYYY'
+--             ELSE 'DD Mon YYYY'
+--         END) AS period_label, total_purchased FROM periodic_trend_6 ORDER BY period DESC) rp) AS trend_6,
+    
+--     (SELECT current_total FROM current_period_total) AS current_total,
+
+--     (SELECT json_agg(row_to_json(rp)) FROM (SELECT TO_CHAR(period, 
+--         CASE (SELECT period_type FROM params)
+--             WHEN 'year' THEN 'YYYY'
+--             WHEN 'month' THEN 'Mon YYYY'
+--             WHEN 'week' THEN '"Week "IW, YYYY'
+--             ELSE 'DD Mon YYYY'
+--         END) AS period_label, total_purchased FROM periodic_trend_12 ORDER BY period DESC) rp) AS trend_12,
+
+--     (SELECT json_agg(row_to_json(product_split)) FROM current_product_split product_split) AS product_wise_split,
+
+--     (SELECT 
+--         ROUND(
+--             CASE 
+--                 WHEN previous_total = 0 THEN 100
+--                 ELSE ((current_total - previous_total) / previous_total::numeric) * 100
+--             END::numeric, 2
+--         )
+--      FROM summary_6) AS percentage_change,
+
+--     (SELECT 
+--         ROUND(
+--             CASE 
+--                 WHEN previous_total = 0 THEN 100
+--                 ELSE (current_total::numeric / previous_total) * 100
+--             END::numeric, 2
+--         )
+--      FROM summary_6) AS share_change;
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- Card 2 In Purchasing Performance 
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+-- WITH params AS (
+--     SELECT 
+--         DATE '2024-12-01' AS start_date,
+--         DATE '2024-12-31' AS end_date,
+--         'month' AS period_type  -- Options: 'day', 'week', 'month', 'year'
+-- ),
+-- filtered_data AS (
+--     SELECT 
+--         pi.updated_date,
+--         pi.vendor_id,
+--         pi.product_id
+--     FROM po_items pi
+--     WHERE pi.updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+-- ),
+-- periodic_trend_6 AS (
+--     SELECT 
+--         DATE_TRUNC((SELECT period_type FROM params), updated_date) AS period,
+--         COUNT(DISTINCT vendor_id) AS supplier_count
+--     FROM filtered_data
+--     GROUP BY period
+--     ORDER BY period DESC
+--     LIMIT 6
+-- ),
+-- periodic_trend_12 AS (
+--     SELECT 
+--         DATE_TRUNC((SELECT period_type FROM params), updated_date) AS period,
+--         COUNT(DISTINCT vendor_id) AS supplier_count
+--     FROM filtered_data
+--     GROUP BY period
+--     ORDER BY period DESC
+--     LIMIT 12
+-- ),
+-- current_period_total AS (
+--     SELECT COUNT(DISTINCT vendor_id) AS current_total FROM filtered_data
+-- ),
+-- previous_period_total AS (
+--     SELECT COUNT(DISTINCT vendor_id) AS previous_total
+--     FROM po_items
+--     WHERE updated_date BETWEEN 
+--         CASE (SELECT period_type FROM params)
+--             WHEN 'year' THEN (SELECT start_date FROM params) - INTERVAL '1 year'
+--             WHEN 'month' THEN (SELECT start_date FROM params) - INTERVAL '1 month'
+--             WHEN 'week' THEN (SELECT start_date FROM params) - INTERVAL '7 days'
+--             ELSE (SELECT start_date FROM params) - INTERVAL '1 day'
+--         END
+--         AND ((SELECT start_date FROM params) - INTERVAL '1 day')
+-- ),
+-- supplier_product_split AS (
+--     SELECT 
+--         vp.product_name,
+--         COUNT(DISTINCT pi.vendor_id) AS supplier_count
+--     FROM po_items pi
+--     JOIN vendor_products vp ON pi.product_id = vp.product_id
+--     WHERE pi.updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+--     GROUP BY vp.product_name
+--     ORDER BY supplier_count DESC
+-- ),
+-- summary_6 AS (
+--     SELECT 
+--         (SELECT current_total FROM current_period_total) AS current_total,
+--         (SELECT previous_total FROM previous_period_total) AS previous_total
+-- )
+-- SELECT 
+--     (SELECT json_agg(row_to_json(trend)) FROM (
+--         SELECT 
+--             TO_CHAR(period, 
+--                 CASE (SELECT period_type FROM params)
+--                     WHEN 'year' THEN 'YYYY'
+--                     WHEN 'month' THEN 'Mon YYYY'
+--                     WHEN 'week' THEN '"Week "IW, YYYY'
+--                     ELSE 'DD Mon YYYY'
+--                 END) AS period_label,
+--             supplier_count
+--         FROM periodic_trend_6
+--         ORDER BY period DESC
+--     ) trend) AS trend_6,
+
+--     (SELECT current_total FROM current_period_total) AS current_total,
+
+--     (SELECT json_agg(row_to_json(trend)) FROM (
+--         SELECT 
+--             TO_CHAR(period, 
+--                 CASE (SELECT period_type FROM params)
+--                     WHEN 'year' THEN 'YYYY'
+--                     WHEN 'month' THEN 'Mon YYYY'
+--                     WHEN 'week' THEN '"Week "IW, YYYY'
+--                     ELSE 'DD Mon YYYY'
+--                 END) AS period_label,
+--             supplier_count
+--         FROM periodic_trend_12
+--         ORDER BY period DESC
+--     ) trend) AS trend_12,
+
+--     (SELECT json_agg(row_to_json(sp)) FROM supplier_product_split sp) AS product_wise_split,
+
+--     (SELECT 
+--         (current_total - previous_total)
+--      FROM summary_6) AS absolute_change,
+
+--     (SELECT 
+--         ROUND(
+--             CASE 
+--                 WHEN previous_total = 0 THEN 100
+--                 ELSE ((current_total - previous_total) / previous_total::numeric) * 100
+--             END::numeric, 2
+--         )
+--      FROM summary_6) AS percentage_change;
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- Card 4: No of Items Purchased 
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- WITH params AS (
+--     SELECT 
+--         DATE '2024-12-01' AS start_date,
+--         DATE '2024-12-31' AS end_date,
+--         'month' AS period_type  -- 'day', 'week', 'month', 'year'
+-- ),
+-- filtered_data AS (
+--     SELECT 
+--         pi.updated_date,
+--         pi.product_id
+--     FROM po_items pi
+--     WHERE pi.updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+-- ),
+-- periodic_trend_6 AS (
+--     SELECT 
+--         DATE_TRUNC((SELECT period_type FROM params), updated_date) AS period,
+--         COUNT(DISTINCT product_id) AS items_purchased
+--     FROM filtered_data
+--     GROUP BY period
+--     ORDER BY period DESC
+--     LIMIT 6
+-- ),
+-- periodic_trend_12 AS (
+--     SELECT 
+--         DATE_TRUNC((SELECT period_type FROM params), updated_date) AS period,
+--         COUNT(DISTINCT product_id) AS items_purchased
+--     FROM filtered_data
+--     GROUP BY period
+--     ORDER BY period DESC
+--     LIMIT 12
+-- ),
+-- current_period_summary AS (
+--     SELECT COUNT(DISTINCT product_id) AS current_value
+--     FROM filtered_data
+-- ),
+-- previous_period_summary AS (
+--     SELECT COUNT(DISTINCT product_id) AS previous_value
+--     FROM po_items
+--     WHERE updated_date BETWEEN 
+--         CASE (SELECT period_type FROM params)
+--             WHEN 'year' THEN (SELECT start_date FROM params) - INTERVAL '1 year'
+--             WHEN 'month' THEN (SELECT start_date FROM params) - INTERVAL '1 month'
+--             WHEN 'week' THEN (SELECT start_date FROM params) - INTERVAL '7 days'
+--             ELSE (SELECT start_date FROM params) - INTERVAL '1 day'
+--         END
+--         AND ((SELECT start_date FROM params) - INTERVAL '1 day')
+-- ),
+-- product_name_split AS (
+--     SELECT 
+--         vp.product_name,
+--         COUNT(DISTINCT pi.product_id) AS items_purchased
+--     FROM po_items pi
+--     JOIN vendor_products vp ON pi.product_id = vp.product_id
+--     WHERE pi.updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+--     GROUP BY vp.product_name
+--     ORDER BY items_purchased DESC
+-- ),
+-- summary_change AS (
+--     SELECT 
+--         (SELECT current_value FROM current_period_summary) AS current_value,
+--         (SELECT previous_value FROM previous_period_summary) AS previous_value
+-- )
+-- SELECT 
+--     (SELECT json_agg(row_to_json(t)) FROM (
+--         SELECT 
+--             TO_CHAR(period, 
+--                 CASE (SELECT period_type FROM params)
+--                     WHEN 'year' THEN 'YYYY'
+--                     WHEN 'month' THEN 'Mon YYYY'
+--                     WHEN 'week' THEN '"Week "IW, YYYY'
+--                     ELSE 'DD Mon YYYY'
+--                 END) AS period_label,
+--             items_purchased
+--         FROM periodic_trend_6
+--         ORDER BY period DESC
+--     ) t) AS trend_6,
+
+--     (SELECT current_value FROM current_period_summary) AS current_value,
+
+--     (SELECT json_agg(row_to_json(t)) FROM (
+--         SELECT 
+--             TO_CHAR(period, 
+--                 CASE (SELECT period_type FROM params)
+--                     WHEN 'year' THEN 'YYYY'
+--                     WHEN 'month' THEN 'Mon YYYY'
+--                     WHEN 'week' THEN '"Week "IW, YYYY'
+--                     ELSE 'DD Mon YYYY'
+--                 END) AS period_label,
+--             items_purchased
+--         FROM periodic_trend_12
+--         ORDER BY period DESC
+--     ) t) AS trend_12,
+
+--     (SELECT json_agg(row_to_json(p)) FROM product_name_split p) AS product_wise_split,
+
+--     (SELECT 
+--         current_value - previous_value
+--      FROM summary_change) AS absolute_change,
+
+--     (SELECT 
+--         ROUND(
+--             CASE 
+--                 WHEN previous_value = 0 THEN 100
+--                 ELSE ((current_value - previous_value) / previous_value::numeric) * 100
+--             END, 2
+--      )
+--      FROM summary_change) AS percentage_change;
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- Card 5: Month-on-Month Purchasing Volume (up to last 6 years) 
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+-- WITH filtered_data AS (
+--     SELECT 
+--         updated_date,
+--         total_amount
+--     FROM po_items
+--     WHERE updated_date >= DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '6 years'
+-- ),
+-- monthly_data AS (
+--     SELECT 
+--         DATE_TRUNC('month', updated_date) AS month,
+--         SUM(total_amount) AS purchase_volume
+--     FROM filtered_data
+--     GROUP BY month
+-- ),
+-- final_output AS (
+--     SELECT 
+--         TO_CHAR(month, 'Mon YYYY') AS month_label,
+--         purchase_volume
+--     FROM monthly_data
+--     ORDER BY month
+-- )
+-- SELECT json_agg(row_to_json(fo)) AS monthly_purchase_trend
+-- FROM final_output fo;
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- Card 6: Year over year
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+-- WITH raw_data AS (
+--     SELECT 
+--         DATE_TRUNC('month', updated_date) AS month_start,
+--         EXTRACT(YEAR FROM updated_date) AS year,
+--         EXTRACT(MONTH FROM updated_date) AS month,
+--         SUM(total_amount) AS purchase_volume
+--     FROM po_items
+--     WHERE updated_date >= (CURRENT_DATE - INTERVAL '6 years')
+--     GROUP BY 1, 2, 3
+-- ),
+-- year_month_labels AS (
+--     SELECT 
+--         TO_CHAR(month_start, 'YYYY-MM') AS month_label,
+--         year,
+--         month,
+--         purchase_volume
+--     FROM raw_data
+-- ),
+-- pivoted_data AS (
+--     SELECT 
+--         year,
+--         json_agg(
+--             json_build_object(
+--                 'month', TO_CHAR(TO_DATE(month::text, 'MM'), 'Mon'),
+--                 'value', purchase_volume
+--             )
+--             ORDER BY month
+--         ) AS monthly_values
+--     FROM year_month_labels
+--     GROUP BY year
+--     ORDER BY year
+-- )
+-- SELECT json_agg(pivoted_data) AS yoy_trend
+-- FROM pivoted_data;
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- Card 7: Yearly Evolution
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+-- SELECT
+--     EXTRACT(YEAR FROM updated_date) AS year,
+--     SUM(CASE WHEN EXTRACT(MONTH FROM updated_date) = 1 THEN total_amount ELSE 0 END) AS Jan,
+--     SUM(CASE WHEN EXTRACT(MONTH FROM updated_date) = 2 THEN total_amount ELSE 0 END) AS Feb,
+--     SUM(CASE WHEN EXTRACT(MONTH FROM updated_date) = 3 THEN total_amount ELSE 0 END) AS Mar,
+--     SUM(CASE WHEN EXTRACT(MONTH FROM updated_date) = 4 THEN total_amount ELSE 0 END) AS Apr,
+--     SUM(CASE WHEN EXTRACT(MONTH FROM updated_date) = 5 THEN total_amount ELSE 0 END) AS May,
+--     SUM(CASE WHEN EXTRACT(MONTH FROM updated_date) = 6 THEN total_amount ELSE 0 END) AS Jun,
+--     SUM(CASE WHEN EXTRACT(MONTH FROM updated_date) = 7 THEN total_amount ELSE 0 END) AS Jul,
+--     SUM(CASE WHEN EXTRACT(MONTH FROM updated_date) = 8 THEN total_amount ELSE 0 END) AS Aug,
+--     SUM(CASE WHEN EXTRACT(MONTH FROM updated_date) = 9 THEN total_amount ELSE 0 END) AS Sep,
+--     SUM(CASE WHEN EXTRACT(MONTH FROM updated_date) = 10 THEN total_amount ELSE 0 END) AS Oct,
+--     SUM(CASE WHEN EXTRACT(MONTH FROM updated_date) = 11 THEN total_amount ELSE 0 END) AS Nov,
+--     SUM(CASE WHEN EXTRACT(MONTH FROM updated_date) = 12 THEN total_amount ELSE 0 END) AS Dec
+-- FROM po_items
+-- WHERE updated_date >= (CURRENT_DATE - INTERVAL '6 years')
+-- GROUP BY year
+-- ORDER BY year;
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- Card 3: Amount Per Supplier
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+-- WITH params AS (
+--     SELECT 
+--         DATE '2024-12-01' AS start_date,
+--         DATE '2024-12-31' AS end_date,
+--         'month' AS period_type  -- 'day', 'week', 'month', 'year'
+-- ),
+-- filtered_data AS (
+--     SELECT 
+--         pi.updated_date,
+--         pi.source_id AS vendor_id,
+--         pi.total_amount,
+--         pi.product_id
+--     FROM po_items pi
+--     WHERE pi.updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+-- ),
+-- periodic_trend_6 AS (
+--     SELECT 
+--         DATE_TRUNC((SELECT period_type FROM params), updated_date) AS period,
+--         ROUND(SUM(total_amount)::numeric / NULLIF(COUNT(DISTINCT vendor_id), 0), 2) AS volume_per_supplier
+--     FROM filtered_data
+--     GROUP BY period
+--     ORDER BY period DESC
+--     LIMIT 6
+-- ),
+-- periodic_trend_12 AS (
+--     SELECT 
+--         DATE_TRUNC((SELECT period_type FROM params), updated_date) AS period,
+--         ROUND(SUM(total_amount)::numeric / NULLIF(COUNT(DISTINCT vendor_id), 0), 2) AS volume_per_supplier
+--     FROM filtered_data
+--     GROUP BY period
+--     ORDER BY period DESC
+--     LIMIT 12
+-- ),
+-- current_period_avg AS (
+--     SELECT 
+--         ROUND(SUM(total_amount)::numeric / NULLIF(COUNT(DISTINCT source_id), 0), 2) AS avg_volume
+--     FROM po_items
+--     WHERE updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+-- ),
+-- previous_period_avg AS (
+--     SELECT 
+--         ROUND(SUM(total_amount)::numeric / NULLIF(COUNT(DISTINCT source_id), 0), 2) AS avg_volume
+--     FROM po_items
+--     WHERE updated_date BETWEEN 
+--         CASE (SELECT period_type FROM params)
+--             WHEN 'year' THEN (SELECT start_date FROM params) - INTERVAL '1 year'
+--             WHEN 'month' THEN (SELECT start_date FROM params) - INTERVAL '1 month'
+--             WHEN 'week' THEN (SELECT start_date FROM params) - INTERVAL '7 days'
+--             ELSE (SELECT start_date FROM params) - INTERVAL '1 day'
+--         END
+--         AND ((SELECT start_date FROM params) - INTERVAL '1 day')
+-- ),
+-- product_wise_avg AS (
+--     SELECT 
+--         vp.product_name,
+--         ROUND(SUM(pi.total_amount)::numeric / NULLIF(COUNT(DISTINCT pi.source_id), 0), 2) AS avg_per_supplier
+--     FROM po_items pi
+--     JOIN vendor_products vp ON pi.product_id = vp.id
+--     WHERE pi.updated_date BETWEEN (SELECT start_date FROM params) AND (SELECT end_date FROM params)
+--     GROUP BY vp.product_name
+--     ORDER BY avg_per_supplier DESC
+-- ),
+-- summary_change AS (
+--     SELECT 
+--         (SELECT avg_volume FROM current_period_avg) AS current_value,
+--         (SELECT avg_volume FROM previous_period_avg) AS previous_value
+-- )
+-- SELECT 
+--     (SELECT json_agg(row_to_json(t)) FROM (
+--         SELECT 
+--             TO_CHAR(period, 
+--                 CASE (SELECT period_type FROM params)
+--                     WHEN 'year' THEN 'YYYY'
+--                     WHEN 'month' THEN 'Mon YYYY'
+--                     WHEN 'week' THEN '"Week "IW, YYYY'
+--                     ELSE 'DD Mon YYYY'
+--                 END) AS period_label,
+--             volume_per_supplier
+--         FROM periodic_trend_6
+--         ORDER BY period DESC
+--     ) t) AS trend_6,
+
+--     (SELECT avg_volume FROM current_period_avg) AS current_value,
+
+--     (SELECT json_agg(row_to_json(t)) FROM (
+--         SELECT 
+--             TO_CHAR(period, 
+--                 CASE (SELECT period_type FROM params)
+--                     WHEN 'year' THEN 'YYYY'
+--                     WHEN 'month' THEN 'Mon YYYY'
+--                     WHEN 'week' THEN '"Week "IW, YYYY'
+--                     ELSE 'DD Mon YYYY'
+--                 END) AS period_label,
+--             volume_per_supplier
+--         FROM periodic_trend_12
+--         ORDER BY period DESC
+--     ) t) AS trend_12,
+
+--     (SELECT json_agg(row_to_json(p)) FROM product_wise_avg p) AS product_wise_split,
+
+--     (SELECT 
+--         ROUND((current_value - previous_value)::numeric, 2)
+--      FROM summary_change) AS absolute_change,
+
+--     (SELECT 
+--         ROUND(
+--             CASE 
+--                 WHEN previous_value = 0 THEN 100
+--                 ELSE ((current_value - previous_value) / previous_value::numeric) * 100
+--             END, 2
+--      )
+--      FROM summary_change) AS percentage_change;

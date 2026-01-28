@@ -1,0 +1,71 @@
+--------------------------------------------------------
+-- Card 1: Cost of Purchase Order
+--------------------------------------------------------
+-- WITH yearly_costs AS (
+--     SELECT
+--         EXTRACT(YEAR FROM created_date)::INT AS year,
+--         ROUND(SUM(total_amount)::NUMERIC, 2) AS total_purchase_cost
+--     FROM po_items
+--     WHERE created_date >= date_trunc('year', CURRENT_DATE) - INTERVAL '5 years'
+--     GROUP BY EXTRACT(YEAR FROM created_date)
+-- ),
+-- this_year_cost AS (
+--     SELECT
+--         total_purchase_cost
+--     FROM yearly_costs
+--     WHERE year = EXTRACT(YEAR FROM CURRENT_DATE)
+-- ),
+-- five_year_trend AS (
+--     SELECT json_agg(json_build_object(
+--         'year', year,
+--         'total_purchase_cost', total_purchase_cost
+--     ) ORDER BY year) AS trend
+--     FROM yearly_costs
+-- )
+-- SELECT json_build_object(
+--     'this_year', (SELECT total_purchase_cost FROM this_year_cost),
+--     'five_year_trend', (SELECT trend FROM five_year_trend)
+-- ) AS result;
+
+--------------------------------------------------------
+-- Card 1: Cost of Purchase Order
+--------------------------------------------------------
+
+WITH base_data AS (
+    SELECT
+        poi.product_id,
+        poi.qty,
+        poi.unit_price,
+        poi.created_date,
+        vp.price::NUMERIC AS reference_price
+    FROM po_items poi
+    JOIN vendor_products vp
+        ON poi.product_id = vp.product_id
+    WHERE 
+        vp.price ~ '^\d+(\.\d+)?$' -- filter out non-numeric prices
+        AND poi.created_date >= date_trunc('year', CURRENT_DATE) - INTERVAL '5 years'
+),
+cost_reduction_data AS (
+    SELECT
+        EXTRACT(YEAR FROM created_date)::INT AS year,
+        SUM(GREATEST(reference_price - unit_price, 0) * qty)::NUMERIC(14, 2) AS cost_reduction
+    FROM base_data
+    GROUP BY EXTRACT(YEAR FROM created_date)
+),
+this_year_cost_reduction AS (
+    SELECT cost_reduction
+    FROM cost_reduction_data
+    WHERE year = EXTRACT(YEAR FROM CURRENT_DATE)
+),
+five_year_trend AS (
+    SELECT json_agg(json_build_object(
+        'year', year,
+        'cost_reduction', cost_reduction
+    ) ORDER BY year) AS trend
+    FROM cost_reduction_data
+)
+SELECT json_build_object(
+    'this_year', (SELECT cost_reduction FROM this_year_cost_reduction),
+    'five_year_trend', (SELECT trend FROM five_year_trend)
+) AS result;
+
